@@ -1,0 +1,33 @@
+﻿# 构建产物
+node_modules/
+dist/
+build/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment
+.env
+*.db
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data
+data/
+
+.pnpm-store/
+.vite/
+*.log
