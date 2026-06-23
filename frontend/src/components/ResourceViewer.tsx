@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from "react";
-import { ArrowLeft, BookOpen, FileText, Code, ClipboardList, RefreshCw, Loader2, Star } from "lucide-react";
+import { ArrowLeft, BookOpen, FileText, Code, ClipboardList, RefreshCw, Loader2 } from "lucide-react";
 
 interface ResourceViewerProps {
   topic: string;
@@ -52,10 +52,11 @@ export default function ResourceViewer({ topic, onBack }: ResourceViewerProps) {
   const [resources, setResources] = useState<any[]>([]);
   const [selected, setSelected] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
+  const [generating, setGenerating] = useState<string | null>(null);
 
   // Load existing resources on mount
   useEffect(() => {
-    fetch("/api/v1/resources").then(r=>r.json()).then(d => {
+    fetch("/api/v1/resources?topic=" + encodeURIComponent(topic === "当前主题" ? "" : topic)).then(r=>r.json()).then(d => {
       const list = d.resources || [];
       setResources(list);
       if (list.length > 0) setSelected(list[0]);
@@ -68,7 +69,7 @@ export default function ResourceViewer({ topic, onBack }: ResourceViewerProps) {
       const res = await fetch("/api/v1/resources/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: "default", topic, resource_types: [type], difficulty: 1 }),
+        body: JSON.stringify({ user_id: "default", topic, resource_types: [type], difficulty: 1, workflow: "generate_resources" }),
       });
       const data = await res.json();
       const items = data.resources || [];
@@ -118,6 +119,10 @@ export default function ResourceViewer({ topic, onBack }: ResourceViewerProps) {
             })}
           </div>
           {loading && <p style={{fontSize:11,color:"var(--text-secondary)",marginTop:6}}>生成中...</p>}
+          <button onClick={()=>generateResource("article")} disabled={loading}
+            style={{marginTop:8,width:"100%",padding:"6px 12px",borderRadius:"var(--radius)",background:"var(--primary)",color:"#fff",fontSize:12,fontWeight:500,border:"none",display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
+            <RefreshCw size={12} />{" "}{loading ? "生成中..." : "重新生成资源"}
+          </button>
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: 8 }}>

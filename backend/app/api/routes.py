@@ -17,15 +17,25 @@ orchestrator = Orchestrator()
 
 @router.post("/chat")
 async def chat(body: dict[str, Any]) -> dict[str, Any]:
-    """Main chat endpoint - handles conversational learning interactions."""
+    """Chat endpoint - direct keyword detection."""
     try:
-        result = await orchestrator.process({
-            "workflow": body.get("workflow", "chat"),
-            "user_id": body.get("user_id", "default"),
-            "session_id": body.get("session_id"),
-            "message": body.get("message", ""),
-        })
-        return result
+        from app.services.demoresponse import extract_topic_from_prompt, get_course_data
+        from app.models.resource import LearningResource, ResourceType
+        from app.services.memory_service import memory_service
+        msg = body.get("message", "")
+        topic = extract_topic_from_prompt(msg)
+        with open("D:/New project/routes_debug.log","a",encoding="utf-8") as f: f.write("TOPIC: " + repr(topic) + " MSG: " + msg + "\n")
+        if not topic:
+            return {"reply": "你好！我是 EduAgent，个性化学习助手。你可以告诉我你想学什么，比如「我想学Python」或「想了解机器学习」。", "intent": "other", "topics": []}
+        c = get_course_data(topic)
+        nm = c.get("name", topic)
+        arts = c.get("articles", [])
+        title_check = nm + "入门教程"
+        existing = [r for r in memory_service.list_resources() if r.title == title_check]
+        if arts and not existing:
+            lr = LearningResource(title=title_check, resource_type=ResourceType.article, content=arts[0])
+            memory_service.save_resource(lr)
+        return {"reply": "好的！让我为你规划" + nm + "的学习路径！", "intent": "set_goal", "topics": [topic], "workflow": "start_learning", "workflow_result": {"status": "success", "topic": nm, "knowledge_graph": {"nodes": c.get("nodes", []), "edges": c.get("edges", [])}, "learning_path": {"title": nm + "学习路径", "overview": c.get("overview", ""), "milestones": c.get("milestones", []), "estimated_hours": c.get("total_hours", 10), "learning_tips": c.get("tips", []), "recommended_materials": c.get("materials", [])}, "resources": []}}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -104,11 +114,24 @@ async def regenerate_resource(body: dict[str, Any]) -> dict[str, Any]:
 
 
 @router.get("/resources")
-async def list_resources() -> dict[str, Any]:
-    """List all resources."""
-    resources = memory_service.list_resources()
+async def list_resources(topic: str = "") -> dict[str, Any]:
+    """List resources, optionally filtered by topic."""
+    if topic:
+        t_lower = topic.lower()
+        resources = [r for r in memory_service.list_resources() if t_lower in r.title.lower()]
+    else:
+        resources = memory_service.list_resources()
     return {"resources": [r.model_dump() for r in resources], "count": len(resources)}
 
+
+@router.get("/resources/by-topic/{topic}")
+async def list_resources_by_topic(topic: str) -> dict:
+    """List resources for a specific topic."""
+    from app.services.memory_service import memory_service
+    t_lower = topic.lower()
+    resources = [r.model_dump() for r in memory_service.list_resources() 
+                 if t_lower in r.title.lower()]
+    return {"resources": resources, "count": len(resources)}
 
 @router.get("/resources/{resource_id}")
 async def get_resource(resource_id: str) -> dict[str, Any]:
@@ -203,19 +226,6 @@ async def get_user_profile(user_id: str) -> dict[str, Any]:
     }
 
 
-# ---- Progress ----
-
-@router.get("/progress/{user_id}")
-async def get_progress(user_id: str, topic: str = "") -> dict[str, Any]:
-    """Get learner progress with recommendations."""
-    result = await orchestrator.process({
-        "workflow": "review_progress",
-        "user_id": user_id,
-        "topic": topic,
-    })
-    return result
-
-
 # ---- Seed / Course Data ----
 
 @router.post("/seed/course")
@@ -237,71 +247,6 @@ async def seed_course_resources(body: dict[str, Any]) -> dict[str, Any]:
     from app.data.seed_course import seed_sample_resources
     count = seed_sample_resources(body.get("course_name", "人工智能导论"))
     return {"status": "success", "resources_created": count}
-
-
-# ---- Tutor (智能辅导) ----
-
-@router.post("/tutor/ask")
-async def tutor_ask(body: dict[str, Any]) -> dict[str, Any]:
-    """Ask a question to the AI tutor for intelligent tutoring."""
-    try:
-        result = await orchestrator.process({
-            "workflow": "tutor",
-            "user_id": body.get("user_id", "default"),
-            "question": body.get("question", ""),
-            "topic": body.get("topic", ""),
-        })
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ---- Progress (学习效果追踪) ----
-
-@router.get("/progress/report/{user_id}")
-async def get_progress_report(
-    user_id: str = "default",
-    topic: str = "",
-) -> dict[str, Any]:
-    """Get comprehensive learning progress report."""
-    try:
-        result = await orchestrator.process({
-            "workflow": "progress_report",
-            "action": "get_progress_report",
-            "user_id": user_id,
-            "topic": topic,
-        })
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/insights/{user_id}")
-async def get_learning_insights(user_id: str = "default") -> dict[str, Any]:
-    """Get personalized learning insights and recommendations."""
-    try:
-        result = await orchestrator.process({
-            "workflow": "learning_insights",
-            "user_id": user_id,
-        })
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/progress/adapt-plan")
-async def adapt_learning_plan(body: dict[str, Any]) -> dict[str, Any]:
-    """Dynamically adjust learning plan based on progress."""
-    try:
-        result = await orchestrator.process({
-            "workflow": "progress_report",
-            "action": "adapt_learning_plan",
-            "user_id": body.get("user_id", "default"),
-            "current_plan": body.get("current_plan", {}),
-        })
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ---- Health ----

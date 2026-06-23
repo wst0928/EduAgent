@@ -59,6 +59,10 @@ class MemoryService:
     # ---- Resource operations ----
 
     def save_resource(self, resource: LearningResource) -> None:
+        # Dedup by title
+        for existing in self._resources.values():
+            if existing.title == resource.title:
+                return
         self._resources[resource.id] = resource
         self._save_resources()
 

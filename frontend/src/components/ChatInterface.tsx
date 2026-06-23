@@ -17,7 +17,7 @@ export default function ChatInterface({ onResponse }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
-      content: "你好！我是 **EduAgent**，个性化学习助手。\n\n我可以帮你：\n- **设定学习目标**：告诉我你想学什么，我来规划学习路径\n- **生成学习资源**：根据你的水平和偏好生成个性化内容\n- **知识图谱**：构建学科知识结构\n- **测验评估**：生成测验并评估掌握程度\n\n**试试告诉我你想学什么？** 比如「我想学Python」或「想了解机器学习」。",
+      content: "你好！我是 EduAgent，个性化学习助手。\n\n我可以帮你：\n- 设定学习目标：告诉我你想学什么，我来规划学习路径\n- 生成学习资源：根据你的水平和偏好生成个性化内容\n- 知识图谱：构建学科知识结构\n- 测验评估：生成测验并评估掌握程度\n\n试试告诉我你想学什么？ 比如「我想学Python」或「想了解机器学习」。",
     },
   ]);
   const [input, setInput] = useState("");
@@ -50,7 +50,7 @@ export default function ChatInterface({ onResponse }: ChatInterfaceProps) {
         return u;
       });
 
-      if (data.workflow === "start_learning") {
+      if (data.workflow === "start_learning" || data.workflow_result) {
         setTimeout(() => onResponse(data), 600);
       }
     } catch {

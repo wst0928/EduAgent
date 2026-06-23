@@ -49,84 +49,36 @@ class UserAgent(BaseAgent):
             return {"reply": "你好！我是你的学习助手，请告诉我你想学习什么？"}
 
     async def _analyze_user_intent(self, user: User, message: str) -> dict[str, Any]:
-        result = await self._llm_structured([
-            {"role": "user", "content": f"""分析以下用户消息，提取学习意图。
+        """Pure keyword-based intent analysis - no LLM."""
+        msg_lower = message.lower()
 
-用户当前画像：
-- 专业方向：{user.profile.major or '未知'}
-- 年级：{user.profile.grade or '未知'}
-- 已有知识：{', '.join(user.profile.existing_knowledge) or '暂无'}
-- 学习风格：{user.profile.learning_style.value}
-- 认知风格：{user.profile.cognitive_style.value}
-- 偏好难度：{user.profile.preferred_difficulty.value}
-- 兴趣：{', '.join(user.profile.interests) or '暂无'}
-- 易错点：{', '.join(user.profile.error_prone_areas) or '暂无'}
-- 学习节奏：{user.profile.learning_pace}
-- 学习动机：{user.profile.motivation}
+        learning_kw = ["学", "了解", "入门", "想学", "学习", "python", "机器", "人工智能", "ai", "深度", "java", "前端", "编程", "数据", "算法", "网络", "sql", "html", "css", "js", "javascript", "c++", "c语言", "go语言", "rust"]
+        quiz_kw = ["测验", "测试", "题目", "练习", "考试", "quiz", "做题"]
 
-消息：{message}
+        has_learning_intent = any(k in msg_lower for k in learning_kw)
+        has_quiz_intent = any(k in msg_lower for k in quiz_kw)
 
-请返回JSON格式：
-{{
-  "intent": "set_goal | ask_question | request_resource | update_profile | other",
-  "topics": ["提取的主题列表"],
-  "difficulty": "beginner | intermediate | advanced",
-  "needs_clarification": true/false,
-  "clarification_question": "如果需要澄清，此处填写追问",
-  "reply": "对用户的友好回复"
-}}"""
-            }])
-        return result
+        from app.services.demoresponse import extract_topic_from_prompt
+        topic = extract_topic_from_prompt(message)
 
-    async def _extract_profile(self, user: User, conversation: str) -> dict[str, Any]:
-        """Extract comprehensive learner profile (8+ dimensions) from conversation."""
-        from app.models.user import DifficultyLevel, LearningStyle, CognitiveStyle
-        result = await self._llm_structured([
-            {"role": "user", "content": "从以下对话中提取全面的学生画像信息（不少于8个维度）。\n\n对话历史：\n" + conversation + "\n\n返回JSON格式，不在对话中的信息留空，不要编造：\n{\n  \"name\": \"用户名称\",\n  \"major\": \"专业方向\",\n  \"grade\": \"年级\",\n  \"existing_knowledge\": [],\n  \"learning_style\": \"mixed\",\n  \"cognitive_style\": \"analytical\",\n  \"preferred_difficulty\": \"beginner\",\n  \"interests\": [],\n  \"error_prone_areas\": [],\n  \"learning_pace\": \"normal\",\n  \"motivation\": \"career\",\n  \"goals\": []\n}"}
-        ])
+        intent = "set_goal" if has_learning_intent else ("assess" if has_quiz_intent else "other")
+        tname = topic if topic and topic != "Python" else "Python编程"
 
-        # Apply all extracted dimensions with proper enum conversion
-        string_fields = {"name", "major", "grade", "learning_pace", "motivation"}
-        enum_map = {
-            "learning_style": (LearningStyle, "mixed"),
-            "cognitive_style": (CognitiveStyle, "analytical"),
-            "preferred_difficulty": (DifficultyLevel, "beginner"),
+        if intent == "set_goal":
+            reply = f"好的！让我为你规划{tname}的学习路径！" if topic else "好的，请告诉我你想学习什么具体的课程？"
+        elif intent == "assess":
+            reply = f"让我为你生成{tname}的测验题！" if topic else "你想要测试哪个课程？"
+        else:
+            reply = "你好！我是你的学习助手。请告诉我你想学习什么？"
+
+        return {
+            "intent": intent,
+            "topics": [tname] if has_learning_intent else [],
+            "difficulty": "beginner",
+            "needs_clarification": False,
+            "clarification_question": "",
+            "reply": reply,
         }
-
-        for field in string_fields:
-            val = result.get(field)
-            if val:
-                setattr(user.profile, field, val)
-
-        for field, (enum_cls, default_val) in enum_map.items():
-            val = result.get(field)
-            if val:
-                try:
-                    setattr(user.profile, field, enum_cls(val))
-                except (ValueError, Exception):
-                    try:
-                        setattr(user.profile, field, enum_cls(default_val))
-                    except Exception:
-                        pass
-
-        for list_field in ("existing_knowledge", "interests", "error_prone_areas"):
-            vals = result.get(list_field, [])
-            if vals:
-                existing = getattr(user.profile, list_field)
-                merged = list(set(existing + vals))
-                setattr(user.profile, list_field, merged)
-
-        for goal_data in result.get("goals", []):
-            goal = LearningGoal(
-                topic=goal_data.get("topic", ""),
-                description=goal_data.get("description", ""),
-            )
-            if goal.topic and goal.topic not in [g.topic for g in user.goals]:
-                user.goals.append(goal)
-
-        memory_service.update_user(user)
-        return {"profile": user.profile.model_dump(), "goals": [g.model_dump() for g in user.goals]}
-
     def _update_goal_from_message(self, user: User, message: str) -> dict[str, Any]:
         goal = LearningGoal(topic=message, description=message)
         if message not in [g.topic for g in user.goals]:

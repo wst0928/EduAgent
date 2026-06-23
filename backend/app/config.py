@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    app_name: str = "EduAgent - 涓€у寲瀛︿範澶氭櫤鑳戒綋绯荤粺"
+    app_name: str = "EduAgent"
     app_version: str = "1.0.0"
     debug: bool = True
 

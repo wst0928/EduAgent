@@ -35,22 +35,73 @@ class Orchestrator(BaseAgent):
         
         
 
-    async def process(self, context: dict[str, Any]) -> dict[str, Any]:
-        workflow = context.get("workflow", "chat")
-        if workflow == "chat":
-            return await self._handle_chat_workflow(context)
-        elif workflow == "start_learning":
-            return await self._start_learning_workflow(context)
-        elif workflow == "generate_resources":
-            return await self._generate_resources_workflow(context)
-        elif workflow == "assess":
-            return await self._assess_workflow(context)
-        elif workflow == "recommend":
-            return await self._recommend_workflow(context)
-        elif workflow == "review_progress":
-            return await self._review_progress_workflow(context)
-        else:
-            return {"error": f"Unknown workflow: {workflow}"}
+    async def process(self, context):
+        w = context.get("workflow", "chat")
+        if w == "chat":
+            return await self._chat_v3(context)
+        elif w == "start_learning":
+            return await self._learn_v3(context)
+        elif w == "generate_resources":
+            return await self._gen_res_v3(context)
+        elif w == "assess":
+            return await self._assess_v3(context)
+        elif w == "recommend":
+            from app.services.memory_service import memory_service
+            recs = memory_service.recommend_resources(context.get("user_id", "default"), context.get("topic", ""), context.get("top_k", 5))
+            return {"status": "success", "recommendations": [r.model_dump() for r in recs]}
+        return {"error": "unknown"}
+
+    async def _chat_v3(self, context):
+        msg = context.get("message", "")
+        open("D:/New project/debug_v3.log","a",encoding="utf-8").write("CHAT_V3:" + msg + "\n")
+        from app.services.demoresponse import extract_topic_from_prompt, get_course_data
+        topic = extract_topic_from_prompt(msg)
+        if not topic:
+            t2 = msg.lower()
+            kws = ["学", "python", "机器", "ai", "java", "编程", "数据", "了解", "入门"]
+            if not any(k in t2 for k in kws):
+                return {"reply": "你好！我是 EduAgent，个性化学习助手。你可以告诉我你想学什么，比如「我想学Python」或「想了解机器学习」。", "intent": "other", "topics": []}
+        from app.models.resource import LearningResource, ResourceType
+        from app.services.memory_service import memory_service
+        c = get_course_data(topic)
+        nm = c.get("name", topic)
+        arts = c.get("articles", [])
+        title_check = nm + "入门教程"
+        existing = [r for r in memory_service.list_resources() if r.title == title_check]
+        if arts and not existing:
+            lr = LearningResource(title=title_check, resource_type=ResourceType.article, content=arts[0])
+            memory_service.save_resource(lr)
+        return {"reply": "好的！让我为你规划" + nm + "的学习路径！", "intent": "set_goal", "topics": [topic], "workflow": "start_learning", "workflow_result": {"status": "success", "topic": nm, "knowledge_graph": {"nodes": c.get("nodes", []), "edges": c.get("edges", [])}, "learning_path": {"title": nm + "学习路径", "overview": c.get("overview", ""), "milestones": c.get("milestones", []), "estimated_hours": c.get("total_hours", 10), "learning_tips": c.get("tips", []), "recommended_materials": c.get("materials", [])}, "resources": []}}
+    async def _learn_v3(self, context):
+        t = context.get("topic", "python")
+        from app.services.demoresponse import get_course_data, extract_topic_from_prompt
+        c = get_course_data(extract_topic_from_prompt(t))
+        return {"status": "success", "topic": c.get("name", t), "knowledge_graph": {"nodes": c.get("nodes", []), "edges": c.get("edges", [])}, "learning_path": {"title": c.get("name", t) + "学习路径", "overview": c.get("overview", ""), "milestones": c.get("milestones", []), "estimated_hours": c.get("total_hours", 10), "learning_tips": c.get("tips", []), "recommended_materials": c.get("materials", [])}, "resources": [{"type": "article", "title": c.get("name", t) + "入门教程", "content": c.get("articles", [""])[0]}] if c.get("articles") else []}
+
+    async def _gen_res_v3(self, context):
+        t = context.get("topic", "")
+        rt = context.get("resource_types", ["article"])
+        from app.services.demoresponse import get_course_data, extract_topic_from_prompt
+        c = get_course_data(extract_topic_from_prompt(t))
+        from app.models.resource import LearningResource, ResourceType
+        from app.services.memory_service import memory_service
+        out = []
+        arts = c.get("articles", [])
+        if arts and "article" in rt:
+            lr = LearningResource(title=c.get("name", t)+"教程", resource_type=ResourceType.article, content=arts[0])
+            memory_service.save_resource(lr)
+            out.append(lr.model_dump())
+        return {"status": "success", "count": len(out), "resources": out}
+
+    async def _assess_v3(self, context):
+        action = context.get("action", "generate_quiz")
+        topic = context.get("topic", "")
+        from app.services.demoresponse import get_course_data, extract_topic_from_prompt
+        c = get_course_data(extract_topic_from_prompt(topic))
+        questions = c.get("practice_questions", [])
+        if not questions:
+            questions = [{"question": topic+"的核心概念是？", "options": ["A. 概念1", "B. 概念2", "C. 概念3", "D. 概念4"], "correct_index": 0, "explanation": "这是核心概念"}]
+        return {"resource_id": "quiz_"+topic, "quiz": {"title": topic+"测验", "questions": questions}}
 
     async def process_stream(
         self, context: dict[str, Any]
@@ -100,81 +151,47 @@ class Orchestrator(BaseAgent):
         yield self._sse("done", {})
 
     async def _handle_chat_workflow(self, context: dict[str, Any]) -> dict[str, Any]:
-        """Handle chat - detect learning intent from keywords, bypass LLM for speed."""
+        """Handle chat with pure keyword detection - no LLM call."""
         user_id = context.get("user_id", "default")
         message = context.get("message", "")
         session_id = context.get("session_id", f"session_{user_id}")
 
-        # Detect learning intent from keywords - NO LLM needed
-        learning_keywords = ["学", "了解", "入门", "想学", "学习", "python", "python编程", "机器学习", "人工智能", "ai", "深度学习", "java", "前端"]
-        msg_lower = message.lower()
-        
-        # Extract topic
         from app.services.demoresponse import extract_topic_from_prompt
-        topic = extract_topic_from_prompt(message)
         
-        has_learning_intent = any(kw in msg_lower for kw in learning_keywords)
+        msg_lower = message.lower()
+        learning_keywords = ["学", "了解", "入门", "想学", "学习", "python", "机器", "人工智能", "ai", "深度", "java", "前端", "编程", "数据"]
+        has_intent = any(kw in msg_lower for kw in learning_keywords)
         
-        # If learning intent detected, skip LLM, go straight to content generation
-        if has_learning_intent:
-            reply = f"好的！让我为你规划{topic}的学习路径，构建知识体系并生成个性化资源！"
-            
-            memory_service.add_to_session(session_id, [
-                {"role": "user", "content": message},
-                {"role": "assistant", "content": reply},
-            ])
-            
-            workflow_result = await self._start_learning_workflow({
-                "user_id": user_id,
-                "topic": topic,
+        intent = "set_goal" if has_intent else "other"
+        topic = extract_topic_from_prompt(message) if has_intent else ""
+        
+        if has_intent:
+            reply = f"好的！让我为你规划{topic}的学习路径！"
+        else:
+            reply = "你好！我是你的学习助手，请告诉我你想学习什么。"
+
+        memory_service.add_to_session(session_id, [
+            {"role": "user", "content": message},
+            {"role": "assistant", "content": reply},
+        ])
+
+        result = {"reply": reply, "intent": intent, "topics": [topic] if topic else [], "profile": None}
+
+        if intent == "set_goal" and topic:
+            wf = await self._start_learning_workflow({
+                "user_id": user_id, "topic": topic,
                 "difficulty": "beginner",
             })
-            
-            return {
-                "reply": reply,
-                "intent": "set_goal",
-                "topics": [topic],
-                "profile": None,
-                "workflow": "start_learning",
-                "workflow_result": workflow_result,
-            }
-        
-        # No learning intent - try LLM for general chat
-        try:
-            intent_result = await self.user_agent.process({
-                "action": "analyze", "user_id": user_id, "message": message,
-            })
-            intent = intent_result.get("intent", "other")
-            reply = intent_result.get("reply", "你好！请告诉我你想学习什么？")
-            topics = intent_result.get("topics", [])
-            
-            memory_service.add_to_session(session_id, [
-                {"role": "user", "content": message},
-                {"role": "assistant", "content": reply},
-            ])
-            
-            result = {"reply": reply, "intent": intent, "topics": topics, "profile": None}
-            
-            if intent == "set_goal" and topics:
-                wf = await self._start_learning_workflow({
-                    "user_id": user_id, "topic": topics[0],
-                    "difficulty": intent_result.get("difficulty", "beginner"),
-                })
-                result["workflow"] = "start_learning"
-                result["workflow_result"] = wf
-            
-            return result
-        except Exception:
-            return {"reply": "你好！我是EduAgent，请告诉我你想学什么，比如「我想学Python编程」。", "intent": "other", "topics": []}
-    
+            result["workflow"] = "start_learning"
+            result["workflow_result"] = wf
 
+        return result
     async def _start_learning_workflow(self, context: dict[str, Any]) -> dict[str, Any]:
-        """Start learning: get course data, try LLM first, fallback to course library."""
+        """Start learning: instant from course library - no LLM."""
         topic = context.get("topic", "Python编程")
         difficulty = context.get("difficulty", "beginner")
         user_id = context.get("user_id", "default")
 
-        # Get course data from library (always works)
         from app.services.demoresponse import get_course_data, extract_topic_from_prompt
         course = get_course_data(extract_topic_from_prompt(topic))
         
@@ -186,19 +203,19 @@ class Orchestrator(BaseAgent):
         total_hours = course.get("total_hours", 10)
         tips = course.get("tips", [])
         materials = course.get("materials", [])
-        articles = course.get("articles", ["# " + topic])
-        
-        resources_in = [
-            {"type": "article", "title": course.get("name", topic) + "入门", "content": articles[0] if articles else "# " + topic},
-            {"type": "summary", "title": course.get("name", topic) + "知识总结", "content": "# " + course.get("name", topic) + "核心知识总结\n\n## 基础概念\n..."},
-            {"type": "exercise", "title": course.get("name", topic) + "练习题", "content": "# " + course.get("name", topic) + "练习题\n\n1. 基础题\n2. 进阶题\n3. 综合题"},
-        ]
+        course_name = course.get("name", topic)
 
-        # Save resources to memory
-        for res in resources_in:
+        # Generate resources from course data
+        resources_out = []
+        articles = course.get("articles", [])
+        if articles:
+            resources_out.append({"type": "article", "title": course_name + "入门教程", "content": articles[0]})
+        
+        # Save to memory
+        from app.models.resource import LearningResource, ResourceType
+        for res in resources_out:
             try:
-                from app.models.resource import LearningResource, ResourceType
-                rt_map = {"article": ResourceType.article, "exercise": ResourceType.exercise, "summary": ResourceType.summary, "study_guide": ResourceType.study_guide}
+                rt_map = {"article": ResourceType.article, "exercise": ResourceType.exercise, "summary": ResourceType.summary}
                 r = LearningResource(
                     title=res.get("title", ""),
                     resource_type=rt_map.get(res.get("type", "article"), ResourceType.article),
@@ -211,7 +228,7 @@ class Orchestrator(BaseAgent):
 
         return {
             "status": "success",
-            "topic": course.get("name", topic),
+            "topic": course_name,
             "difficulty": difficulty,
             "knowledge_graph": {"node_count": len(nodes), "edge_count": len(edges), "nodes": nodes, "edges": edges},
             "learning_path": {
@@ -222,11 +239,8 @@ class Orchestrator(BaseAgent):
                 "learning_tips": tips,
                 "recommended_materials": materials,
             },
-            "initial_resource": {"title": resources_in[0].get("title", ""), "preview": resources_in[0].get("content", "")[:200]},
-            "resources": [{"type": r.get("type", "article"), "title": r.get("title", ""), "content": r.get("content", "")} for r in resources_in],
+            "resources": resources_out,
         }
-    
-
     async def _generate_resources_workflow(self, context: dict[str, Any]) -> dict[str, Any]:
         tasks = []
         resource_types = context.get("resource_types",
@@ -309,56 +323,6 @@ class Orchestrator(BaseAgent):
             "suggestions": "根据当前进度，建议继续按计划学习或调整难易度。",
         }
 
-    async def _tutor_workflow(self, context: dict[str, Any]) -> dict[str, Any]:
-        """智能辅导：解答学生问题并提供多模态解释"""
-        user_id = context.get("user_id", "default")
-        question = context.get("question", "")
-        topic = context.get("topic", "")
-
-        # Step 1: Answer the question
-        answer_result = await self.tutor_agent.process({
-            "action": "answer_question",
-            "user_id": user_id,
-            "question": question,
-            "topic": topic,
-        })
-
-        # Step 2: Record the interaction
-        memory_service.add_to_session(f"tutor_{user_id}", [
-            {"role": "user", "content": question, "timestamp": str(__import__("datetime").datetime.utcnow())},
-            {"role": "assistant", "content": answer_result.get("answer", {}).get("summary", "")},
-        ])
-
-        # Step 3: Check user understanding with follow-up
-        if answer_result.get("answer", {}).get("follow_up_questions"):
-            followup = await self.tutor_agent.process({
-                "action": "ask_followup",
-                "question": question,
-                "answer_summary": answer_result.get("answer", {}).get("summary", ""),
-            })
-            answer_result["follow_up"] = followup
-
-        return {
-            "status": "success",
-            "workflow": "tutor_answer",
-            "question": question,
-            "topic": topic,
-            "answer": answer_result.get("answer", {}),
-            "follow_up": answer_result.get("follow_up", {}),
-        }
-
-    async def _progress_report_workflow(self, context: dict[str, Any]) -> dict[str, Any]:
-        """生成完整的学习进度报告"""
-        result = await self.progress_tracker.process(context)
-        return result
-
-    async def _learning_insights_workflow(self, context: dict[str, Any]) -> dict[str, Any]:
-        """生成个性化学习洞察"""
-        result = await self.progress_tracker.process({
-            **context, "action": "get_learning_insights",
-        })
-        return result
-
     def _sse(self, event: str, data: dict) -> str:
         return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
@@ -366,3 +330,7 @@ class Orchestrator(BaseAgent):
 
 
 
+
+# FORCE_RECOMPILE v2
+
+# VERSION: 2026-06-23T15:48:30.812824
