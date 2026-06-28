@@ -1,4 +1,4 @@
-﻿"""Resource Generation Agent: creates personalized learning materials via LLM.
+"""Resource Generation Agent: creates personalized learning materials via LLM.
    Features: content safety filter, progress tracking, multi-type generation."""
 from __future__ import annotations
 
@@ -66,42 +66,51 @@ class ResourceGenerationAgent(BaseAgent):
             return {"error": f"Unknown action: {action}"}
 
     async def _generate_resource(self, context: dict[str, Any]) -> dict[str, Any]:
-        """Generate a resource - use course library fallback instantly."""
         topic = context.get("topic", "")
         resource_type_str = context.get("resource_type", "article")
         difficulty = context.get("difficulty", 1)
         knowledge_node_id = context.get("knowledge_node_id")
-
         try:
             resource_type = ResourceType(resource_type_str)
         except ValueError:
             resource_type = ResourceType.article
-
-        # Use course library directly - fast and reliable
-        from app.services.demoresponse import get_course_data, extract_topic_from_prompt, fallback_text
-        course = get_course_data(extract_topic_from_prompt(topic))
-        articles = course.get("articles", [])
-        if articles:
-            result = articles[0]
+        type_prompt = RESOURCE_TYPE_PROMPTS.get(resource_type_str, "生成高质量的学习内容")
+        llm_messages = [
+            {"role": "system", "content": PROMPT},
+            {"role": "user", "content": f"主题：{topic}\n资源类型：{resource_type_str}\n要求：{type_prompt}"}
+        ]
+        result = await self._llm_chat(llm_messages)
+        if result and "LLM服务暂时不可用" not in result and len(result) > 50:
+            final_content = result
+            print(f"LLM OK for {topic}/{resource_type_str}")
         else:
-            result = fallback_text("生成关于" + topic + "的" + resource_type_str)
-
+            import json
+            rich_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "rich_content.json")
+            try:
+                with open(rich_file, "r", encoding="utf-8") as rf:
+                    rich = json.load(rf)
+                final_content = rich.get(resource_type_str, "")
+            except:
+                final_content = ""
+            if not final_content:
+                from app.services.demoresponse import get_course_data, extract_topic_from_prompt, fallback_text
+                course = get_course_data(extract_topic_from_prompt(topic))
+                arts = course.get("articles", [])
+                if resource_type_str == "article" and arts:
+                    final_content = arts[0]
+                else:
+                    final_content = fallback_text(f"生成关于{topic}的{resource_type_str}")
         resource = LearningResource(
             title=f"{topic} - {resource_type.value}",
             resource_type=resource_type,
-            content=result,
+            content=final_content,
             difficulty=ResourceDifficulty(difficulty),
             metadata=ResourceMetadata(tags=[topic], language="zh-CN"),
             knowledge_node_id=knowledge_node_id,
         )
         memory_service.save_resource(resource)
-
-        preview = result[:500] + "..." if len(result) > 500 else result
-        return {
-            "resource": resource.model_dump(),
-            "content_preview": preview,
-        }
-
+        preview = final_content[:500] + "..." if len(final_content) > 500 else final_content
+        return {"resource": resource.model_dump(), "content_preview": preview}
     async def _generate_resource_with_progress(
         self, context: dict[str, Any]
     ) -> dict[str, Any]:

@@ -1,4 +1,4 @@
-﻿"""离线演示模式：根据用户输入的主题动态生成示范回复，支持多个学科"""
+"""离线演示模式：根据用户输入的主题动态生成示范回复，支持多个学科"""
 import json
 
 # ========== 预置课程知识库 ==========
@@ -34,7 +34,54 @@ COURSE_TOPICS = {
         "overview": "本路径将从零开始带领你掌握Python编程，涵盖基础语法、数据结构、函数、面向对象编程和常用库的使用。共分为4个阶段，循序渐进。",
         "tips": ["多动手写代码，每学一个概念就编写小程序验证", "善用官方文档和在线资源", "加入编程社区，遇到问题主动搜索和交流"],
         "materials": ["Python官方文档", "《Python编程从入门到实践》", "LeetCode编程练习平台"],
-        "articles": ["# Python编程基础\n\nPython是一种高级、解释型、面向对象的编程语言，由Guido van Rossum于1991年创建。它以简洁的语法和强大的功能著称。\n\n## 快速开始\n安装Python后，打开终端输入 `python --version` 验证安装。\n\n### 你的第一个程序\n```python\nprint(\"Hello, World!\")\n```\n\n### 变量和数据类型\n```python\nname = \"小明\"       # 字符串\nage = 18            # 整数\nheight = 1.75       # 浮点数\nis_student = True   # 布尔值\n```"],
+        "articles": ["# Python编程基础\n\nPython是一种高级、解释型、面向对象的编程语言，由Guido van Rossum于1991年创建。它以简洁的语法和强大的功能著称。\n\n## 快速开始\n安装Python后，打开终端输入 `python --version` 验证安装。\n\n### 你的第一个程序\n```python\nprint(\"Hello, World!\")\n```\n\n### 变量和数据类型\n```python\nname = \"小明\"       # 字符串\nage = 18            # 整数\nheight = 1.75       # 浮点数\nis_student = True   # 布尔值\n```", """# Python基础语法详解
+
+## 变量与数据类型
+Python是动态类型语言，变量不需要声明类型。
+基本类型：str、int、float、bool、list
+
+## 流程控制
+if/elif/else 条件判断；for/while 循环
+
+## 函数定义
+def greet(name): return f"Hello, {name}"
+
+## 常用数据结构
+列表(list)、元组(tuple)、字典(dict)、集合(set)
+""", """# Python面向对象编程
+
+## 类与对象
+class Student:
+    def __init__(self, name, age):
+        self.name = name; self.age = age
+
+## 继承
+子类继承父类的方法和属性。
+
+## 魔术方法
+__str__、__len__、__eq__ 等让类更强大。
+""", """# NumPy入门
+
+## 创建数组
+import numpy as np
+arr = np.array([1,2,3,4,5])
+zeros = np.zeros((3,4))
+
+## 数组运算
+a = np.array([1,2,3]); b = np.array([4,5,6])
+print(a + b)  # [5 7 9]
+print(np.dot(a, b))  # 32
+""", """# Pandas数据分析
+
+## 创建DataFrame
+import pandas as pd
+df = pd.DataFrame({"name": ["A","B","C"], "score": [85,92,78]})
+
+## 数据操作
+print(df.head())
+print(df.describe())
+high = df[df["score"] > 80]
+"""],
     },
     "机器学习": {
         "name": "机器学习",
@@ -66,7 +113,45 @@ COURSE_TOPICS = {
         "overview": "机器学习是人工智能的核心领域。本路径从基础概念出发，逐步深入到主流算法和实战项目，帮助你系统掌握机器学习。",
         "tips": ["数学是基础，但不要被公式吓到——先理解直觉再深入数学", "多跑代码实践，Scikit-learn是你最好的伙伴", "参加Kaggle竞赛锻炼实战能力"],
         "materials": ["《机器学习》(周志华)", "Scikit-learn官方文档", "Kaggle竞赛平台"],
-        "articles": ["# 机器学习入门\n\n机器学习是人工智能的一个分支，它使计算机能够从数据中学习和改进，而无需明确编程。\n\n## 机器学习分类\n- **监督学习**：使用标注数据训练模型\n- **无监督学习**：从无标注数据中发现模式\n- **强化学习**：通过与环境交互学习\n\n## 学习路线\n1. 掌握Python和数学基础\n2. 学习Scikit-learn库\n3. 从简单算法开始：线性回归、KNN\n4. 逐步深入：决策树、SVM、神经网络"],
+        "articles": ["# 机器学习入门\n\n机器学习是人工智能的一个分支，它使计算机能够从数据中学习和改进，而无需明确编程。\n\n## 机器学习分类\n- **监督学习**：使用标注数据训练模型\n- **无监督学习**：从无标注数据中发现模式\n- **强化学习**：通过与环境交互学习\n\n## 学习路线\n1. 掌握Python和数学基础\n2. 学习Scikit-learn库\n3. 从简单算法开始：线性回归、KNN\n4. 逐步深入：决策树、SVM、神经网络", """# 监督学习算法
+
+## 线性回归
+from sklearn.linear_model import LinearRegression
+model = LinearRegression()
+model.fit(X, y)
+
+## 决策树
+通过树形结构做决策，可解释性强。
+
+## 评估指标
+准确率、精确率、召回率、F1分数
+""", """# 无监督学习
+
+## K-Means聚类
+将数据分成K个簇，每个样本属于最近的簇中心。
+
+## PCA降维
+主成分分析将高维数据映射到低维空间。
+
+## DBSCAN
+基于密度的聚类算法。
+""", """# 模型评估与调优
+
+## 交叉验证
+from sklearn.model_selection import cross_val_score
+scores = cross_val_score(model, X, y, cv=5)
+
+## 过拟合与欠拟合
+过拟合：训练集好但泛化差
+欠拟合：未能充分学习
+""", """# 实战项目流程
+1. 问题定义
+2. 数据预处理
+3. 特征工程
+4. 模型训练
+5. 评估调优
+6. 模型部署
+"""],
     },
     "人工智能": {
         "name": "人工智能导论",
@@ -98,7 +183,41 @@ COURSE_TOPICS = {
         "overview": "人工智能是当今最具变革性的技术之一。本课程从AI的核心理念出发，覆盖经典AI方法到现代深度学习，帮助你全面了解AI技术体系。",
         "tips": ["先建立整体框架再深入细节", "关注算法背后的直觉而非数学推导", "多阅读AI前沿论文和技术博客"],
         "materials": ["《人工智能:一种现代方法》", "CS229机器学习课程", "Hugging Face社区"],
-        "articles": ["# 人工智能导论\n\n人工智能(Artificial Intelligence, AI)是研究和开发能够模拟、延伸和扩展人类智能的理论、方法、技术及应用系统的科学。\n\n## AI的主要分支\n- 机器学习与深度学习\n- 自然语言处理\n- 计算机视觉\n- 机器人学\n- 专家系统\n\n## 学习建议\nAI领域发展迅速，建议保持持续学习的习惯，关注顶级会议论文(NeurIPS、ICML、CVPR等)。"],
+        "articles": ["# 人工智能导论\n\n人工智能(Artificial Intelligence, AI)是研究和开发能够模拟、延伸和扩展人类智能的理论、方法、技术及应用系统的科学。\n\n## AI的主要分支\n- 机器学习与深度学习\n- 自然语言处理\n- 计算机视觉\n- 机器人学\n- 专家系统\n\n## 学习建议\nAI领域发展迅速，建议保持持续学习的习惯，关注顶级会议论文(NeurIPS、ICML、CVPR等)。", """# 搜索算法
+
+## BFS
+逐层扩展，保证找到最短路径。
+
+## DFS
+沿路径搜索到底再回溯。
+
+## A*算法
+结合g(n)和h(n)的最优路径搜索。
+""", """# 知识表示
+
+## 一阶谓词逻辑
+用谓词和量词表示知识。
+
+## 产生式系统
+IF-THEN规则。
+
+## 语义网络
+节点和弧表示概念关系。
+""", """# 神经网络
+
+## 感知机
+最简单的神经网络单元。
+
+## 多层神经网络
+通过隐藏层学习非线性特征，用反向传播训练。
+""", """# 大语言模型
+
+## Prompt技巧
+明确指令、提供示例、分步骤、设定角色
+
+## 典型应用
+文本生成、代码审查、翻译、知识图谱
+"""],
     },
 }
 
@@ -255,7 +374,7 @@ def fallback_text(prompt: str) -> str:
     course = get_course_data(topic)
     course_name = course["name"]
 
-    if "python" in prompt_lower or ("文章" in prompt_lower or "article" in prompt_lower):
+    if "article" in prompt_lower or "\u6587\u7ae0" in prompt_lower:
         return course["articles"][0]
     elif "exercise" in prompt_lower or "练习" in prompt_lower:
         return f"""# {course_name}练习题
@@ -310,6 +429,30 @@ def fallback_text(prompt: str) -> str:
 
 ## 常见问题
 - 初学者常见的困惑和解决方法
+"""
+    elif "code" in prompt_lower or "\u4ee3\u7801" in prompt_lower:
+        return f"""# {course_name} \u4ee3\u7801\u793a\u4f8b
+
+## \u793a\u4f8b1\uff1a\u57fa\u7840\u7528\u6cd5
+\u2192python
+# \u57fa\u7840\u4ee3\u7801\u793a\u4f8b
+print("Hello")
+class Demo:
+    def __init__(self, name):
+        self.name = name
+
+## \u793a\u4f8b2\uff1a\u8fdb\u9636\u5e94\u7528
+\u2192python
+import math
+def process(data):
+    return [x * 2 for x in data if x > 0]
+
+## \u793a\u4f8b3\uff1a\u5b8c\u6574\u9879\u76ee
+\u2192python
+def main():
+    data = get_input()
+    processed = process_data(data)
+    save_output(processed)
 """
     else:
         return f"# {course_name}入门\n\n{course_name}是一门非常重要的学科，涵盖广泛的知识体系。\n\n## 核心内容\n- 基础概念\n- 关键技术\n- 实践应用\n\n让我们一起开始{course_name}学习之旅吧！"

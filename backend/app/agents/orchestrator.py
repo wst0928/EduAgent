@@ -1,4 +1,4 @@
-﻿"""Orchestrator: coordinates all agents for end-to-end learning workflows.
+"""Orchestrator: coordinates all agents for end-to-end learning workflows.
    Adds: streaming, recommendation, progress tracking."""
 from __future__ import annotations
 
@@ -70,6 +70,9 @@ class Orchestrator(BaseAgent):
         existing = [r for r in memory_service.list_resources() if r.title == title_check]
         if arts and not existing:
             lr = LearningResource(title=title_check, resource_type=ResourceType.article, content=arts[0])
+            # Pre-gen all types
+            await self._gen_res_v3({"topic": topic, "resource_types": ["summary", "exercise", "study_guide", "code_example"]})
+
             memory_service.save_resource(lr)
         return {"reply": "好的！让我为你规划" + nm + "的学习路径！", "intent": "set_goal", "topics": [topic], "workflow": "start_learning", "workflow_result": {"status": "success", "topic": nm, "knowledge_graph": {"nodes": c.get("nodes", []), "edges": c.get("edges", [])}, "learning_path": {"title": nm + "学习路径", "overview": c.get("overview", ""), "milestones": c.get("milestones", []), "estimated_hours": c.get("total_hours", 10), "learning_tips": c.get("tips", []), "recommended_materials": c.get("materials", [])}, "resources": []}}
     async def _learn_v3(self, context):
@@ -79,20 +82,41 @@ class Orchestrator(BaseAgent):
         return {"status": "success", "topic": c.get("name", t), "knowledge_graph": {"nodes": c.get("nodes", []), "edges": c.get("edges", [])}, "learning_path": {"title": c.get("name", t) + "学习路径", "overview": c.get("overview", ""), "milestones": c.get("milestones", []), "estimated_hours": c.get("total_hours", 10), "learning_tips": c.get("tips", []), "recommended_materials": c.get("materials", [])}, "resources": [{"type": "article", "title": c.get("name", t) + "入门教程", "content": c.get("articles", [""])[0]}] if c.get("articles") else []}
 
     async def _gen_res_v3(self, context):
+        import json, os
         t = context.get("topic", "")
         rt = context.get("resource_types", ["article"])
-        from app.services.demoresponse import get_course_data, extract_topic_from_prompt
-        c = get_course_data(extract_topic_from_prompt(t))
+        from app.services.demoresponse import extract_topic_from_prompt, get_course_data
+        course = get_course_data(extract_topic_from_prompt(t))
+        nm = course.get("name", t)
+        arts = course.get("articles", [])
+        rich_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "rich_content.json")
+        try:
+            with open(rich_file, "r", encoding="utf-8") as rf:
+                rich = json.load(rf)
+        except:
+            rich = {}
         from app.models.resource import LearningResource, ResourceType
         from app.services.memory_service import memory_service
         out = []
-        arts = c.get("articles", [])
-        if arts and "article" in rt:
-            lr = LearningResource(title=c.get("name", t)+"教程", resource_type=ResourceType.article, content=arts[0])
-            memory_service.save_resource(lr)
-            out.append(lr.model_dump())
+        for res_type in rt:
+            ct = ""
+            if res_type == "article":
+                ct = rich.get("article", arts[0] if arts else "")
+            elif res_type == "summary":
+                ct = rich.get("summary", arts[1] if len(arts) > 1 else "")
+            elif res_type == "exercise":
+                ct = rich.get("exercise", "")
+            elif res_type == "study_guide":
+                ct = rich.get("study_guide", "")
+            elif res_type == "code_example":
+                ct = rich.get("code_example", "")
+            else:
+                ct = arts[0] if arts else ""
+            if ct:
+                item = LearningResource(title=f"{nm} - {res_type}", resource_type=ResourceType(res_type), content=ct)
+                memory_service.save_resource(item)
+                out.append(item.model_dump())
         return {"status": "success", "count": len(out), "resources": out}
-
     async def _assess_v3(self, context):
         action = context.get("action", "generate_quiz")
         topic = context.get("topic", "")
